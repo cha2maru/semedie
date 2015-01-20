@@ -1,0 +1,19 @@
+<%- partial ('./Partials/header.ejs') %>
+<div class="container">
+    <div class="row clearfix">
+        <div class="col-md-12 column">
+            <ul class="media-list">
+                <% _.each(channel.episodes, function (episode) { %>
+                <li class="media">
+                    <a class="media-left" href="#">
+                        <img alt="64x64" src="http://lorempixel.com/300/300/people" class="media-object img-responsive list">
+                    </a>
+                    <div class="media-body">
+                        <h4 class="media-heading">><%= episode.title %></h4> <%= episode.description %>
+                    </div>
+                </li>
+                <% }) %>
+            </ul>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,19 @@
+<%- partial ( './Partials/header.ejs') %>
+    <div class="container" id="channel-list">
+        <div class="row clearfix">
+            <div class="col-md-12 column">
+                <div class="row">
+                    <div v-repeat="channels" class="col-lg-2 col-md-3 col-sm-4 col-xs-6">
+                        <div class="thumbnail">
+                            <a href="detail/{{id}}">
+                                <img alt="100x100" src="http://lorempixel.com/300/300/people">
+                                <div class="caption">
+                                    <span class="badge">{{id}}</span>{{title}}
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
