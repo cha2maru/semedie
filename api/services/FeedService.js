@@ -59,134 +59,135 @@ var getTask = function(target, tasks, url) {
  * @type {Object}
  */
 var defaultTasks = {
-    findUrl: {
+    FindUrl: {
         list: [{
             regexp: ".*",
-            action: defaultAction.findUrl,
+            action: defaultAction.FindUrl,
             option: {}
         }],
-        action: defaultAction.findUrl
+        action: defaultAction.FindUrl
     },
-    getFeed: {
+    GetFeed: {
         list: [{
             regexp: ".*",
-            action: defaultAction.getFeed,
+            action: defaultAction.GetFeed,
             option: {}
         }],
-        action: defaultAction.getFeed,
+        action: defaultAction.GetFeed,
         option: {}
     },
-    parseFeed: {
+    ParseFeed: {
         list: [{
             regexp: ".*",
-            action: defaultAction.parseFeed,
+            action: defaultAction.ParseFeed,
             option: {}
         }],
-        action: defaultAction.parseFeed,
+        action: defaultAction.ParseFeed,
         option: {}
     },
-    getChannel: {
+    GetChannel: {
         list: [{
             regexp: ".*",
-            action: defaultAction.getChannel,
+            action: defaultAction.GetChannel,
             option: {}
         }],
-        action: defaultAction.getChannel,
+        action: defaultAction.GetChannel,
         option: {}
     },
-    getEpisode: {
+    GetEpisode: {
         list: [{
             regexp: ".*",
-            action: defaultAction.getEpisode,
+            action: defaultAction.GetEpisode,
             option: {}
         }],
-        action: defaultAction.getEpisode,
+        action: defaultAction.GetEpisode,
         option: {}
     },
-    modifyChannel: {
+    ModifyChannel: {
         list: [{
             regexp: ".*",
-            action: defaultAction.modifyChannel,
+            action: defaultAction.ModifyChannel,
             option: {}
         }],
-        action: defaultAction.modifyChannel,
+        action: defaultAction.ModifyChannel,
         option: {}
     },
-    modifyEpisode: {
+    ModifyEpisode: {
         list: [{
             regexp: ".*",
-            action: defaultAction.modifyEpisode,
+            action: defaultAction.ModifyEpisode,
             option: {}
         }],
-        action: defaultAction.modifyEpisode,
+        action: defaultAction.ModifyEpisode,
         option: {}
     }
 };
 
 var defaultAction = {
-    findUrl: function(url, option, callback) {
-        callback(url);
+    FindUrl: function(url, option) {
+        return {
+            option: option,
+            action: function(url, callback) {
+                callback(url);
+            }
+        };
     },
-    getFeed: function(url, option, callback) {
-        // 指定urlにhttpリクエストする
-        request.get(url)
-            .on('error', function(err) {
-                console.log(err);
-            }).on('response', function(res) {
-                if (res.statusCode !== 200)
-                    return this.emit('error', new Error('Bad status code'));
-                var charset =
-                    getParams(res.headers['content-type'] || '').charset;
-                console.log(res.headers['content-type']);
-                res = maybeTranslate(res, charset);
-                res.pipe(tasks.getFeedParser(tasks, callback));
-            });
-
-    },
-    getCustomFeed: function() {
-        // TODO: カスタムフィードをとってくるのを考えるべき。
-    },
-    getFeedDynamic: function(url, tasks, callback) {
-        // 指定urlにhttpリクエストする
-        request.get(url)
-            .on('error', function(err) {
-                console.log(err);
-            }).on('response', function(res) {
-                if (res.statusCode !== 200)
-                    return this.emit('error', new Error('Bad status code'));
-                var charset;
-                if (tasks.checkContentType(res.headers['content-type'])) {
-                    charset =
-                        getParams(res.headers['content-type'] || '').charset;
-                    console.log(res.headers['content-type']);
-                    res = maybeTranslate(res, charset);
-                    res.pipe(tasks.getFeedParser(tasks, callback));
-                } else {
-                    // TODO: フィードのURL探してきて突っ込む？
-                    charset =
+    GetFeed: function(url, option) {
+        var getFeedDynamic = function(url, tasks, callback) {
+            // 指定urlにhttpリクエストする
+            request.get(url)
+                .on('error', function(err) {
+                    console.log(err);
+                }).on('response', function(res) {
+                    if (res.statusCode !== 200)
+                        return this.emit('error', new Error('Bad status code'));
+                    var charset;
+                    if (tasks.checkContentType(res.headers['content-type'])) {
+                        charset =
+                            getParams(res.headers['content-type'] || '').charset;
+                        console.log(res.headers['content-type']);
+                        res = maybeTranslate(res, charset);
+                        res.pipe(tasks.getFeedParser(tasks, callback));
+                    } else {
+                        // TODO: フィードのURL探してきて突っ込む？
+                        charset =
+                            getParams(res.headers['content-type'] || '').charset;
+                        console.log(res.headers['content-type']);
+                        res = maybeTranslate(res, charset);
+                        res.pipe(tasks.parseFeed(tasks, callback));
+                    }
+                });
+        };
+        var getFeedStatic = function(url, tasks, callback) {
+            // 指定urlにhttpリクエストする
+            request.get(url)
+                .on('error', function(err) {
+                    console.log(err);
+                }).on('response', function(res) {
+                    if (res.statusCode !== 200)
+                        return this.emit('error', new Error('Bad status code'));
+                    if (tasks.checkContentType(res.headers['content-type']))
+                        return this.emit('error', new Error('Bad Content Type'));
+                    var charset =
                         getParams(res.headers['content-type'] || '').charset;
                     console.log(res.headers['content-type']);
                     res = maybeTranslate(res, charset);
                     res.pipe(tasks.parseFeed(tasks, callback));
-                }
-            });
-    },
-    getFeedStatic: function(url, tasks, callback) {
-        // 指定urlにhttpリクエストする
-        request.get(url)
-            .on('error', function(err) {
-                console.log(err);
-            }).on('response', function(res) {
-                if (res.statusCode !== 200)
-                    return this.emit('error', new Error('Bad status code'));
-                if (tasks.checkContentType(res.headers['content-type']))
-                    return this.emit('error', new Error('Bad Content Type'));
-                var charset =
-                    getParams(res.headers['content-type'] || '').charset;
-                console.log(res.headers['content-type']);
-                res = maybeTranslate(res, charset);
-                res.pipe(tasks.parseFeed(tasks, callback));
-            });
+                });
+        };
+
+
+        if (option.pattern === "static") {
+            return {
+                option: option,
+                action: getFeedStatic
+            };
+        } else {
+            return {
+                option: option,
+                action: getFeedDynamic
+            };
+        }
     },
     checkContentType: function(param) {
         var typearray = [
