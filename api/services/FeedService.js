@@ -133,6 +133,77 @@ var defaultAction = {
         };
     },
     GetFeed: function(url, option) {
+        /**
+         * [getParams description]
+         * @param  {[type]} str [description]
+         * @return {[type]}     [description]
+         */
+        var getParams = function(str) {
+            var params = str.split(';').reduce(function(params, param) {
+                var parts = param.split('=').map(function(part) {
+                    return part.trim();
+                });
+                if (parts.length === 2) {
+                    params[parts[0]] = parts[1];
+                }
+                return params;
+            }, {});
+            return params;
+        };
+
+        /**
+         * [checkContentType description]
+         * @param  {[type]} param [description]
+         * @return {[type]}       [description]
+         */
+        var checkContentType = function(param) {
+            var typearray = [
+                "application/xml",
+                "application/rdf+xml",
+                "application/rss+xml",
+                "application/atom+xml"
+            ];
+
+            for (var i = 0; i < typearray.length; i++) {
+                if (param.indexOf(typearray[i]) > -1) {
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        /**
+         * [maybeTranslate description]
+         * @param  {[type]} res     [description]
+         * @param  {[type]} charset [description]
+         * @return {[type]}         [description]
+         */
+        var maybeTranslate = function(res, charset) {
+            var iconv;
+            // Use iconv if its not utf8 already.
+            if (!iconv && charset && !/utf-*8/i.test(charset)) {
+                try {
+                    iconv = new Iconv(charset, 'utf-8');
+                    console.log('Converting from charset %s to utf-8', charset);
+                    iconv.on('error');
+                    // If we're using iconv, stream will be the output of iconv
+                    // otherwise it will remain the output of request
+                    res = res.pipe(iconv);
+                } catch (err) {
+                    res.emit('error', err);
+                }
+            }
+            return res;
+        };
+
+
+        /**
+         * [getFeedDynamic description]
+         * @param  {[type]}   url      [description]
+         * @param  {[type]}   tasks    [description]
+         * @param  {Function} callback [description]
+         * @return {[type]}            [description]
+         */
         var getFeedDynamic = function(url, tasks, callback) {
             // 指定urlにhttpリクエストする
             request.get(url)
@@ -142,7 +213,7 @@ var defaultAction = {
                     if (res.statusCode !== 200)
                         return this.emit('error', new Error('Bad status code'));
                     var charset;
-                    if (tasks.checkContentType(res.headers['content-type'])) {
+                    if (checkContentType(res.headers['content-type'])) {
                         charset =
                             getParams(res.headers['content-type'] || '').charset;
                         console.log(res.headers['content-type']);
@@ -166,7 +237,7 @@ var defaultAction = {
                 }).on('response', function(res) {
                     if (res.statusCode !== 200)
                         return this.emit('error', new Error('Bad status code'));
-                    if (tasks.checkContentType(res.headers['content-type']))
+                    if (checkContentType(res.headers['content-type']))
                         return this.emit('error', new Error('Bad Content Type'));
                     var charset =
                         getParams(res.headers['content-type'] || '').charset;
@@ -189,48 +260,38 @@ var defaultAction = {
             };
         }
     },
-    checkContentType: function(param) {
-        var typearray = [
-            "application/xml",
-            "application/rdf+xml",
-            "application/rss+xml",
-            "application/atom+xml"
-        ];
-
-        for (var i = 0; i < typearray.length; i++) {
-            if (param.indexOf(typearray[i]) > -1) {
-                return true;
+    ParseFeed: function(url, option) {
+        return {
+            option: option,
+            action: function(tasks, callback) {
+                var parser = new FeedParser();
+                parser.on('error', function(err) {
+                        console.error('HTTP failure while fetching feed');
+                        callback('error', err);
+                    })
+                    .on('meta', function(meta) {
+                        var channel = tasks.getChannel(meta);
+                        channel = tasks.modifyChannel(channel);
+                        // console.log(channel);
+                        callback('channel', channel);
+                    })
+                    .on('readable', function() {
+                        var stream = this,
+                            item;
+                        // chunkデータを保存する
+                        while (item = stream.read()) {
+                            var episode = tasks.getEpisode(item);
+                            episode = tasks.modifyEpisode(episode);
+                            // console.log(episode);
+                            callback('episode', episode);
+                        }
+                    })
+                    .on('end', function() {
+                        callback('end', {});
+                    });
+                return parser;
             }
-            return false;
-        }
-    },
-    parseFeed: function(tasks, callback) {
-        var parser = new FeedParser();
-        parser.on('error', function(err) {
-                console.error('HTTP failure while fetching feed');
-                callback('error', err);
-            })
-            .on('meta', function(meta) {
-                var channel = tasks.getChannel(meta);
-                channel = tasks.modifyChannel(channel);
-                // console.log(channel);
-                callback('channel', channel);
-            })
-            .on('readable', function() {
-                var stream = this,
-                    item;
-                // chunkデータを保存する
-                while (item = stream.read()) {
-                    var episode = tasks.getEpisode(item);
-                    episode = tasks.modifyEpisode(episode);
-                    // console.log(episode);
-                    callback('episode', episode);
-                }
-            })
-            .on('end', function() {
-                callback('end', {});
-            });
-        return parser;
+        };
     },
     /**
      * [getChannel description]
@@ -314,46 +375,4 @@ var defaultAction = {
 var setNullChar = function(c) {
     if (c !== undefined) return c;
     return "";
-};
-
-/**
- * [getParams description]
- * @param  {[type]} str [description]
- * @return {[type]}     [description]
- */
-var getParams = function(str) {
-    var params = str.split(';').reduce(function(params, param) {
-        var parts = param.split('=').map(function(part) {
-            return part.trim();
-        });
-        if (parts.length === 2) {
-            params[parts[0]] = parts[1];
-        }
-        return params;
-    }, {});
-    return params;
-};
-
-/**
- * [maybeTranslate description]
- * @param  {[type]} res     [description]
- * @param  {[type]} charset [description]
- * @return {[type]}         [description]
- */
-var maybeTranslate = function(res, charset) {
-    var iconv;
-    // Use iconv if its not utf8 already.
-    if (!iconv && charset && !/utf-*8/i.test(charset)) {
-        try {
-            iconv = new Iconv(charset, 'utf-8');
-            console.log('Converting from charset %s to utf-8', charset);
-            iconv.on('error');
-            // If we're using iconv, stream will be the output of iconv
-            // otherwise it will remain the output of request
-            res = res.pipe(iconv);
-        } catch (err) {
-            res.emit('error', err);
-        }
-    }
-    return res;
 };
