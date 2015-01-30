@@ -10,50 +10,133 @@ var FeedParser = require('feedparser'),
     request = require('request'),
     Iconv = require('iconv').Iconv,
     merge = require('merge');
+var EventEmitter = require('events').EventEmitter;
+var util = require("util");
 
 
 module.exports = {
     pluginList: defaultList,
-    getAction: function(target, data, option) {
-        return getAction(target, data.url, option, this.pluginList);
+    getAction: function(action, target, option) {
+        return getAction(action, target.url, option, this.pluginList);
     },
-    getFindUrl: function(data, option) {
-        return getAction('FindUrl', data.url, option, this.pluginList);
-    },
-    getGetFeed: function(data, option) {
-        return getAction('GetFeed', data.url, option, this.pluginList);
-    },
-    getParseFeed: function(data, option) {
-        return getAction('ParseFeed', data.url, option, this.pluginList);
-    },
-    getFeedServiceData: function(url, eventemit, callback) {
-        return {
-            url: url,
-            http: {},
-            feed: {
-                meta: {},
-                items: []
+    getFeedService: function(url) {
+        var flow = new SubscribeFlow(url);
+        return flow;
+    }
+};
+
+var SubscribeFlow = function(url) {
+    this.url = url;
+    this.actions = [];
+    this.flow = {
+        entry: {
+            action: 'start',
+            param: 'FindUrl'
+        },
+        done: {
+            FindUrl: {
+                action: 'start',
+                param: 'GetFeed'
             },
-            channel: {},
-            episodes: [],
-            media: [],
-            eventemit:eventemit,
-            callback: callback
-        };
-    }
-};
-
-
-var getAction = function(target, url, option, plugin) {
-    var op = option;
-    for (var i = 0; i < plugin[target].list.length; i++) {
-        if (url.regexp(plugin[target].list[i].regexp)) {
-            return plugin[target].list[i]
-                .action(url, merge(op, plugin[target].option));
+            GetFeed: {
+                action: 'start',
+                param: 'ParseFeed'
+            },
+            ParseFeed: {
+                action: 'notify',
+                param: 'End'
+            },
+            GetChannel: {
+                action: 'start',
+                param: 'ModifyChannel'
+            },
+            GetEpisode: {
+                action: 'start',
+                param: 'ModifyEpisode'
+            },
+            ModifyEpisode: {
+                action: 'notify',
+                param: 'Episode'
+            },
+            GetMedia: {
+                action: 'notify',
+                param: 'Media'
+            },
+            ModifyMedia: {
+                action: 'notify',
+                param: 'Media'
+            }
+        },
+        get: {
+            Meta: {
+                action: 'start',
+                target: 'GetChannel'
+            },
+            Item: {
+                action: 'start',
+                param: 'GetEpisode'
+            }
         }
-    }
-    return plugin[target].action(url, merge(op, plugin[target].option));
+    };
+
+    // var data = {
+    //     type: 'Meta',
+    //     target: 'url',
+    //     data: {}
+    // };
+
+    // var next = {
+    //     action: 'start',
+    //     param: 'GetEpisode'
+    // };
+
+    this.on('done', fucntion(data) {
+        var next = getNextAction('done', data);
+        startNextAction(next, data);
+    });
+
+    this.on('get', fucntion(data) {
+        var next = getNextAction('get', data);
+        startNextAction(next, data);
+    });
+
+    var getNextAction = function(event, data) {
+        return this.flow[event][data.type];
+    };
+
+    var startNextAction = function(next, data) {
+        var target = done[data.type];
+        switch (event.action) {
+            case 'start':
+                var targetAction = getAction(next.param, data.url, {}, PluginService.pluginList);
+                var num = this.actions.push(targetAction);
+                this.actions[num-1].action();
+                break;
+            case 'notify':
+                this.notify(event, data);
+                break;
+            default:
+                break;
+        }
+    };
+
+    var getAction = function(action, url, option, plugin) {
+        var op = option;
+        for (var i = 0; i < Plugin[action].list.length; i++) {
+            if (url.regexp(plugin[action].list[i].regexp)) {
+                return plugin[action].list[i]
+                    .action(url, merge(op, plugin[action].option));
+            }
+        }
+        return plugin[action].action(url, merge(op, plugin[action].option));
+    };
+
+    EventEmitter.call(this);
 };
+
+util.inherits(FeedServiceData, EventEmitter);
+
+
 
 /**
  * [defaultTasks description]
@@ -62,33 +145,34 @@ var getAction = function(target, url, option, plugin) {
 var defaultList = {
     FindUrl: {
         list: [{
-            regexp: ".*",
+            regexp: ".*nico.*",
             action: defaultAction.FindUrl,
             option: {}
         }],
-        action: defaultAction.FindUrl
+        action: defaultAction.FindUrl,
+        option: {},
     },
-    GetFeed: {
+    RequestFeed: {
         list: [{
-            regexp: ".*",
-            action: defaultAction.GetFeed,
+            regexp: ".*nico.*",
+            action: defaultAction.RequestFeed,
             option: {}
         }],
-        action: defaultAction.GetFeed,
-        option: {}
+        action: defaultAction.RequestFeed,
+        option: {},
     },
     ParseFeed: {
         list: [{
-            regexp: ".*",
+            regexp: ".*nico.*",
             action: defaultAction.ParseFeed,
             option: {}
         }],
         action: defaultAction.ParseFeed,
-        option: {}
+        option: {},
     },
     GetChannel: {
         list: [{
-            regexp: ".*",
+            regexp: ".*nico.*",
             action: defaultAction.GetChannel,
             option: {}
         }],
@@ -97,7 +181,7 @@ var defaultList = {
     },
     GetEpisode: {
         list: [{
-            regexp: ".*",
+            regexp: ".*nico.*",
             action: defaultAction.GetEpisode,
             option: {}
         }],
@@ -106,7 +190,7 @@ var defaultList = {
     },
     ModifyChannel: {
         list: [{
-            regexp: ".*",
+            regexp: ".*nico.*",
             action: defaultAction.ModifyChannel,
             option: {}
         }],
@@ -115,7 +199,7 @@ var defaultList = {
     },
     ModifyEpisode: {
         list: [{
-            regexp: ".*",
+            regexp: ".*nico.*",
             action: defaultAction.ModifyEpisode,
             option: {}
         }],
@@ -128,12 +212,12 @@ var defaultAction = {
     FindUrl: function(url, option) {
         return {
             option: option,
-            action: function(data, callback) {
-                callback(data);
+            action: function(target, flow) {
+                ev.emit('end_Findurl', data);
             }
         };
     },
-    GetFeed: function(url, option) {
+    RequestFeed: function(url, option) {
         /**
          * [getParams description]
          * @param  {[type]} str [description]
@@ -205,7 +289,7 @@ var defaultAction = {
          * @param  {Function} callback [description]
          * @return {[type]}            [description]
          */
-        var getFeedDynamic = function(data, callback) {
+        var getFeedDynamic = function(target, flow) {
             // 指定urlにhttpリクエストする
             request.get(data.url)
                 .on('error', function(err) {
@@ -219,18 +303,18 @@ var defaultAction = {
                             getParams(res.headers['content-type'] || '').charset;
                         console.log(res.headers['content-type']);
                         res = maybeTranslate(res, charset);
-                        callback(data);
+                        ev.emit('end_GetFeed', data);
                     } else {
                         // TODO: フィードのURL探してきて突っ込む？
                         charset =
                             getParams(res.headers['content-type'] || '').charset;
                         console.log(res.headers['content-type']);
                         data.http = maybeTranslate(res, charset);
-                        callback(data);
+                        ev.emit('end_GetFeed', data);
                     }
                 });
         };
-        var getFeedStatic = function(data, callback) {
+        var getFeedStatic = function(target, flow) {
             // 指定urlにhttpリクエストする
             request.get(data.url)
                 .on('error', function(err) {
@@ -244,7 +328,7 @@ var defaultAction = {
                         getParams(res.headers['content-type'] || '').charset;
                     console.log(res.headers['content-type']);
                     data.http = maybeTranslate(res, charset);
-                    callback(data);
+                    ev.emit('end_GetFeed', data);
                 });
         };
 
@@ -261,10 +345,10 @@ var defaultAction = {
             };
         }
     },
-    ParseFeed: function(url, option) {
+    ParseFeed: function(data, option) {
         return {
             option: option,
-            action: function(data, callback) {
+            action: function(target, flow) {
                 var parser = new FeedParser();
                 parser.on('error', function(err) {
                         console.error('HTTP failure while fetching feed');
@@ -272,7 +356,7 @@ var defaultAction = {
                     })
                     .on('meta', function(meta) {
                         data.feed.meta = meta;
-                        data.eventemit('channel', data);
+                        ev.emit('start_GetChannel', data);
                     })
                     .on('readable', function() {
                         var stream = this,
@@ -285,7 +369,7 @@ var defaultAction = {
                         }
                     })
                     .on('end', function() {
-                        callback('end', data);
+                        ev.emit('end_ParseFeed', data);
                     });
                 data.http.pipe(parser(data, callback));
             }
@@ -299,8 +383,8 @@ var defaultAction = {
     GetChannel: function(data, option) {
         return {
             option: option,
-            action: function(data, callback) {
-                data.channel ={
+            action: function(target, flow) {
+                data.channel = {
                     title: data.title,
                     description: data.description,
                     link: data.link,
@@ -321,7 +405,7 @@ var defaultAction = {
     ModifyChannel: function(data, option) {
         return {
             option: option,
-            action: function(data, callback) {
+            action: function(target, flow) {
                 data.channel = {
                     title: data.title,
                     description: data.description,
