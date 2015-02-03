@@ -17,8 +17,8 @@ module.exports = {
             var result = {};
 
             switch (event) {
-                case 'channel':
-                    console.log('channel');
+                case 'Channel':
+                    console.log('Channel');
                     console.log(data);
                     Channel.findOrCreate({
                         xmlurl: data.xmlurl
@@ -35,7 +35,7 @@ module.exports = {
                             });
                     });
                     break;
-                case 'episode':
+                case 'Episode':
                     data.owner = channelid;
                     Episode.findOrCreate({
                         owner: data.owner,
@@ -48,7 +48,6 @@ module.exports = {
                     break;
                 case 'end':
                     console.log('done:' + channelid);
-
                     break;
                 case 'error':
                     console.error('error:' + channelid);

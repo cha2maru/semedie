@@ -53,3 +53,65 @@ a [Sails](http://sailsjs.org) application
 * Episode情報を補完する
 * Media情報を補完する
 * 全情報を保存する
+
+
+    this.flow = {
+        entry: {
+            action: 'start',
+            param: 'FindUrl'
+        },
+        done: {
+            FindUrl: {
+                action: 'start',
+                param: 'GetFeed'
+            },
+            GetFeed: {
+                action: 'start',
+                param: 'ParseFeed'
+            },
+            ParseFeed: {
+                action: 'notify',
+                param: 'End'
+            },
+            GetChannel: {
+                action: 'start',
+                param: 'ModifyChannel'
+            },
+            GetEpisode: {
+                action: 'start',
+                param: 'ModifyEpisode'
+            },
+            ModifyEpisode: {
+                action: 'notify',
+                param: 'Episode'
+            },
+            GetMedia: {
+                action: 'notify',
+                param: 'Media'
+            },
+            ModifyMedia: {
+                action: 'notify',
+                param: 'Media'
+            }
+        },
+        get: {
+            Meta: {
+                action: 'start',
+                target: 'GetChannel'
+            },
+            Item: {
+                action: 'start',
+                param: 'GetEpisode'
+            }
+        }
+    };
+
+    // var data = {
+    //     type: 'Meta',
+    //     target: 'url',
+    //     data: {}
+    // };
+    // var next = {
+    //     action: 'start',
+    //     param: 'GetEpisode'
+    // };
