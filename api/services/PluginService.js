@@ -43,10 +43,6 @@ var SubscribeFlow = function(url) {
                 action: 'start',
                 param: 'ParseFeed'
             },
-            ParseFeed: {
-                action: 'notify',
-                param: 'End'
-            },
             GetChannel: {
                 action: 'start',
                 param: 'ModifyChannel'
@@ -75,7 +71,7 @@ var SubscribeFlow = function(url) {
         get: {
             Meta: {
                 action: 'start',
-                target: 'GetChannel'
+                param: 'GetChannel'
             },
             Item: {
                 action: 'start',
@@ -115,6 +111,9 @@ var SubscribeFlow = function(url) {
     };
 
     var startNextAction = function(next, data, self) {
+        if(!next) {
+            next = {action:'notify',param:'end'};
+        }
         switch (next.action) {
             case 'start':
                 var targetAction = getAction(next.param, data.url, {}, PluginService.PluginList);
@@ -258,25 +257,18 @@ var defaultAction = {
                         //     target: 'url',
                         //     data: {}
                         // };
-                        flow.emit('done', {
-                            type: 'GetFeed',
-                            target: target.url,
-                            data: res
-                        });
+                        parseFeed(res,target,flow);
                     } else {
                         // TODO: フィードのURL探してきて突っ込む？
                         charset =
                             getParams(res.headers['content-type'] || '').charset;
                         console.log(res.headers['content-type']);
                         res = maybeTranslate(res, charset);
-                        flow.emit('done', {
-                            type: 'GetFeed',
-                            target: target.url,
-                            data: res
-                        });
+                        parseFeed(res,target,flow);
                     }
                 });
         };
+
         var getFeedStatic = function(target, flow) {
             // 指定urlにhttpリクエストする
             request.get(target.url)
@@ -291,12 +283,44 @@ var defaultAction = {
                         getParams(res.headers['content-type'] || '').charset;
                     console.log(res.headers['content-type']);
                     res = maybeTranslate(res, charset);
-                    flow.emit('done', {
-                        type: 'GetFeed',
-                        target: target.url,
-                        data: res
-                    });
+                        parseFeed(res,target,flow);
                 });
+        };
+
+        var parseFeed = function(res,target,flow){
+                var parser = new FeedParser();
+                parser
+                    .on('meta', function(meta) {
+                        flow.emit('get', {
+                            type: 'Meta',
+                            target: meta.link,
+                            data: meta
+                        });
+                    })
+                    .on('readable', function() {
+                        var stream = this;
+                        // chunkデータを保存する
+                        while (item = stream.read()) {
+                            // if (!data.episode) data.episode = [];
+                            // data.feed.episode.push(episode);
+                            flow.emit('get', {
+                                type: 'Item',
+                                target: item.link,
+                                data: item
+                            });
+                        }
+                    })
+                    .on('end', function() {
+                        flow.emit('done', {
+                            type: 'ParseFeed',
+                            target: target.target,
+                            data: {}
+                        });
+                    }).on('error', function(err) {
+                        console.error('HTTP failure while fetching feed');
+                        flow.emit('error', err);
+                    });
+                res.pipe(parser);
         };
 
 
@@ -312,46 +336,46 @@ var defaultAction = {
             };
         }
     },
-    ParseFeed: function(url, option) {
-        return {
-            option: option,
-            action: function(target, flow) {
-                var parser = new FeedParser();
-                parser
-                    .on('meta', function(meta) {
-                        flow.emit('get', {
-                            type: 'Meta',
-                            target: target.url,
-                            data: meta
-                        });
-                    })
-                    .on('readable', function() {
-                        var stream = this;
-                        // chunkデータを保存する
-                        while (item = stream.read()) {
-                            // if (!data.episode) data.episode = [];
-                            // data.feed.episode.push(episode);
-                            flow.emit('get', {
-                                type: 'Item',
-                                target: target.url,
-                                data: item
-                            });
-                        }
-                    })
-                    .on('end', function() {
-                        flow.emit('done', {
-                            type: 'ParseFeed',
-                            target: target.url,
-                            data: {}
-                        });
-                    }).on('error', function(err) {
-                        console.error('HTTP failure while fetching feed');
-                        flow.emit('error', err);
-                    });
-                target.data.pipe(parser);
-            }
-        };
-    },
+    // ParseFeed: function(url, option) {
+    //     return {
+    //         option: option,
+    //         action: function(target, flow) {
+    //             var parser = new FeedParser();
+    //             parser
+    //                 .on('meta', function(meta) {
+    //                     flow.emit('get', {
+    //                         type: 'Meta',
+    //                         target: target.url,
+    //                         data: meta
+    //                     });
+    //                 })
+    //                 .on('readable', function() {
+    //                     var stream = this;
+    //                     // chunkデータを保存する
+    //                     while (item = stream.read()) {
+    //                         // if (!data.episode) data.episode = [];
+    //                         // data.feed.episode.push(episode);
+    //                         flow.emit('get', {
+    //                             type: 'Item',
+    //                             target: item.link,
+    //                             data: item
+    //                         });
+    //                     }
+    //                 })
+    //                 .on('end', function() {
+    //                     flow.emit('done', {
+    //                         type: 'ParseFeed',
+    //                         target: target.url,
+    //                         data: {}
+    //                     });
+    //                 }).on('error', function(err) {
+    //                     console.error('HTTP failure while fetching feed');
+    //                     flow.emit('error', err);
+    //                 });
+    //             target.data.pipe(parser);
+    //         }
+    //     };
+    // },
     /**
      * [getChannel description]
      * @param  {[type]} data [description]
@@ -361,15 +385,19 @@ var defaultAction = {
         return {
             option: option,
             action: function(target, flow) {
-                data.channel = {
-                    title: data.title,
-                    description: data.description,
-                    link: data.link,
-                    date: data.date,
-                    xmlurl: data.xmlurl,
-                    image: (data.image) ? data.image : "",
+                var data = {
+                    title: target.data.title,
+                    description: target.data.description,
+                    link: target.data.link,
+                    date: target.data.date,
+                    xmlurl: target.data.xmlurl,
+                    image: (target.data.image) ? target.data.image : "",
                 };
-                callback(data);
+                flow.emit('done', {
+                    type: 'ModifyChannel',
+                    target: data.link,
+                    data: data
+                });
             }
         };
 
@@ -383,15 +411,11 @@ var defaultAction = {
         return {
             option: option,
             action: function(target, flow) {
-                data.channel = {
-                    title: data.title,
-                    description: data.description,
-                    link: data.link,
-                    date: data.date,
-                    xmlurl: data.xmlurl,
-                    image: (data.image) ? data.image : "",
-                };
-                callback(data);
+                flow.emit('done', {
+                    type: 'ModifyChannel',
+                    target: target.link,
+                    data: target.data
+                });
             }
         };
 
@@ -405,13 +429,13 @@ var defaultAction = {
         return {
             option: option,
             action: function(target, flow) {
-                data = {
-                    title: (target.title) ? target.title : "",
-                    description: (target.description) ? target.description : "",
-                    date: (target.date) ? target.date : "",
-                    link: (target.link) ? target.link : "",
-                    image: (target.image) ? target.image : "",
-                    enclosures: target.enclosures,
+                var data = {
+                    title: (target.data.title) ? target.data.title : "",
+                    description: (target.data.description) ? target.data.description : "",
+                    date: (target.data.date) ? target.data.date : "",
+                    link: (target.data.link) ? target.data.link : "",
+                    image: (target.data.image) ? target.data.image : "",
+                    enclosures: target.data.enclosures,
                 };
                 flow.emit('done', {
                     type: 'GetEpisode',
