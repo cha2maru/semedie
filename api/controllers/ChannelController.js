@@ -8,7 +8,7 @@
 module.exports = {
     subscribe: function(req, res) {
         // console.log(req.params());
-        console.log(req);
+        // console.log(req);
 
         var feedurl = "http://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp";
         var channelid = 0;
@@ -19,7 +19,7 @@ module.exports = {
             switch (event) {
                 case 'Channel':
                     console.log('Channel');
-                    console.log(data);
+                    // console.log(data);
                     Channel.findOrCreate({
                         xmlurl: data.xmlurl
                     }, data).exec(function(err, r) {

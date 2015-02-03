@@ -15,7 +15,6 @@ var util = require("util");
 
 
 module.exports = {
-    pluginList: defaultList,
     getAction: function(action, target, option) {
         return getAction(action, target.url, option, this.pluginList);
     },
@@ -38,7 +37,7 @@ var SubscribeFlow = function(url) {
         done: {
             FindUrl: {
                 action: 'start',
-                param: 'GetFeed'
+                param: 'RequestFeed'
             },
             GetFeed: {
                 action: 'start',
@@ -95,31 +94,35 @@ var SubscribeFlow = function(url) {
     //     param: 'GetEpisode'
     // };
 
-    this.on('start', fucntion() {
-        var next = getNextAction('start', {});
-        startNextAction(next, {});
-    }).on('done', fucntion(data) {
-        var next = getNextAction('done', data);
-        startNextAction(next, data);
-    }).on('get', fucntion(data) {
-        var next = getNextAction('get', data);
-        startNextAction(next, data);
+    this.on('start', function() {
+        var next = getNextAction('start', {}, this);
+        startNextAction(next, {}, this);
     });
 
-    var getNextAction = function(event, data) {
-        if (event === 'start') return this.flow[event];
-        return this.flow[event][data.type];
+    this.on('done', function(data) {
+        var next = getNextAction('done', data, this);
+        startNextAction(next, data, this);
+    });
+
+    this.on('get', function(data) {
+        var next = getNextAction('get', data, this);
+        startNextAction(next, data, this);
+    });
+
+    var getNextAction = function(event, data, self) {
+        if (event === 'start') return self.flow[event];
+        return self.flow[event][data.type];
     };
 
-    var startNextAction = function(next, data) {
+    var startNextAction = function(next, data, self) {
         switch (next.action) {
             case 'start':
-                var targetAction = getAction(next.param, data.url, {}, PluginService.pluginList);
-                var num = this.actions.push(targetAction);
-                this.actions[num - 1].action(data, this);
+                var targetAction = getAction(next.param, data.url, {}, PluginService.PluginList);
+                var num = self.actions.push(targetAction);
+                self.actions[num - 1].action(data, self);
                 break;
             case 'notify':
-                this.emit(next.param, data.data);
+                self.emit(next.param, data.data);
                 break;
             default:
                 break;
@@ -128,11 +131,15 @@ var SubscribeFlow = function(url) {
 
     var getAction = function(action, url, option, plugin) {
         var op = option;
-        for (var i = 0; i < Plugin[action].list.length; i++) {
-            if (url.regexp(plugin[action].list[i].regexp)) {
-                return plugin[action].list[i]
-                    .action(url, merge(op, plugin[action].option));
-            }
+        if (plugin[action].list) {
+           plugin[action].list.forEach(function(ele){
+                var re = new RegExp(ele.regexp);
+                if (re.exec(url)) {
+                    return ele
+                        .action(url, merge(op, ele.option));
+                }
+
+           });
         }
         return plugin[action].action(url, merge(op, plugin[action].option));
     };
@@ -140,79 +147,7 @@ var SubscribeFlow = function(url) {
     EventEmitter.call(this);
 };
 
-util.inherits(FeedServiceData, EventEmitter);
-
-
-
-/**
- * [defaultTasks description]
- * @type {Object}
- */
-var defaultList = {
-    FindUrl: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.FindUrl,
-            option: {}
-        }],
-        action: defaultAction.FindUrl,
-        option: {},
-    },
-    RequestFeed: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.RequestFeed,
-            option: {}
-        }],
-        action: defaultAction.RequestFeed,
-        option: {},
-    },
-    ParseFeed: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.ParseFeed,
-            option: {}
-        }],
-        action: defaultAction.ParseFeed,
-        option: {},
-    },
-    GetChannel: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.GetChannel,
-            option: {}
-        }],
-        action: defaultAction.GetChannel,
-        option: {}
-    },
-    GetEpisode: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.GetEpisode,
-            option: {}
-        }],
-        action: defaultAction.GetEpisode,
-        option: {}
-    },
-    ModifyChannel: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.ModifyChannel,
-            option: {}
-        }],
-        action: defaultAction.ModifyChannel,
-        option: {}
-    },
-    ModifyEpisode: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.ModifyEpisode,
-            option: {}
-        }],
-        action: defaultAction.ModifyEpisode,
-        option: {}
-    }
-};
+util.inherits(SubscribeFlow, EventEmitter);
 
 var defaultAction = {
     FindUrl: function(url, option) {
@@ -289,8 +224,7 @@ var defaultAction = {
                     // If we're using iconv, stream will be the output of iconv
                     // otherwise it will remain the output of request
                     res = res.pipe(iconv);
-                }
-                catch (err) {
+                } catch (err) {
                     res.emit('error', err);
                 }
             }
@@ -307,7 +241,7 @@ var defaultAction = {
          */
         var getFeedDynamic = function(target, flow) {
             // 指定urlにhttpリクエストする
-            request.get(target.url)
+            request.get(target.target)
                 .on('error', function(err) {
                     console.log(err);
                 }).on('response', function(res) {
@@ -329,13 +263,12 @@ var defaultAction = {
                             target: target.url,
                             data: res
                         });
-                    }
-                    else {
+                    } else {
                         // TODO: フィードのURL探してきて突っ込む？
                         charset =
                             getParams(res.headers['content-type'] || '').charset;
                         console.log(res.headers['content-type']);
-                        data.http = maybeTranslate(res, charset);
+                        res = maybeTranslate(res, charset);
                         flow.emit('done', {
                             type: 'GetFeed',
                             target: target.url,
@@ -372,8 +305,7 @@ var defaultAction = {
                 option: option,
                 action: getFeedStatic
             };
-        }
-        else {
+        } else {
             return {
                 option: option,
                 action: getFeedDynamic
@@ -385,10 +317,7 @@ var defaultAction = {
             option: option,
             action: function(target, flow) {
                 var parser = new FeedParser();
-                parser.on('error', function(err) {
-                        console.error('HTTP failure while fetching feed');
-                        flow.emit('error', err);
-                    })
+                parser
                     .on('meta', function(meta) {
                         flow.emit('get', {
                             type: 'Meta',
@@ -397,17 +326,17 @@ var defaultAction = {
                         });
                     })
                     .on('readable', function() {
-                        var stream = this,
-                            // chunkデータを保存する
-                            while (item = stream.read()) {
-                                // if (!data.episode) data.episode = [];
-                                // data.feed.episode.push(episode);
-                                flow.emit('get', {
-                                    type: 'Item',
-                                    target: target.url,
-                                    data: item
-                                });
-                            }
+                        var stream = this;
+                        // chunkデータを保存する
+                        while (item = stream.read()) {
+                            // if (!data.episode) data.episode = [];
+                            // data.feed.episode.push(episode);
+                            flow.emit('get', {
+                                type: 'Item',
+                                target: target.url,
+                                data: item
+                            });
+                        }
                     })
                     .on('end', function() {
                         flow.emit('done', {
@@ -415,8 +344,11 @@ var defaultAction = {
                             target: target.url,
                             data: {}
                         });
+                    }).on('error', function(err) {
+                        console.error('HTTP failure while fetching feed');
+                        flow.emit('error', err);
                     });
-                target.data.pipe(parser(data, callback));
+                target.data.pipe(parser);
             }
         };
     },
@@ -553,4 +485,75 @@ var defaultAction = {
 var setNullChar = function(c) {
     if (c !== undefined) return c;
     return "";
+};
+
+
+/**
+ * [defaultTasks description]
+ * @type {Object}
+ */
+module.exports.PluginList = {
+    FindUrl: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.FindUrl,
+            option: {}
+        }],
+        action: defaultAction.FindUrl,
+        option: {},
+    },
+    RequestFeed: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.RequestFeed,
+            option: {}
+        }],
+        action: defaultAction.RequestFeed,
+        option: {},
+    },
+    ParseFeed: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.ParseFeed,
+            option: {}
+        }],
+        action: defaultAction.ParseFeed,
+        option: {},
+    },
+    GetChannel: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.GetChannel,
+            option: {}
+        }],
+        action: defaultAction.GetChannel,
+        option: {}
+    },
+    GetEpisode: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.GetEpisode,
+            option: {}
+        }],
+        action: defaultAction.GetEpisode,
+        option: {}
+    },
+    ModifyChannel: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.ModifyChannel,
+            option: {}
+        }],
+        action: defaultAction.ModifyChannel,
+        option: {}
+    },
+    ModifyEpisode: {
+        list: [{
+            regexp: ".*nico.*",
+            action: defaultAction.ModifyEpisode,
+            option: {}
+        }],
+        action: defaultAction.ModifyEpisode,
+        option: {}
+    }
 };

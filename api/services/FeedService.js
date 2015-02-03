@@ -4,8 +4,6 @@
 /*jshint node: true */
 
 
-var async = require('async');
-
 /**
  * [exports description]
  * @type {Object}
