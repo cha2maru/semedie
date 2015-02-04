@@ -42,6 +42,8 @@ module.exports = {
                     // console.log('item');
                 });
                 // console.log(data);
+            }).on('error',function(data){
+                console.log('error');
             });
         getfeedFlow.emit('start', {});
     },

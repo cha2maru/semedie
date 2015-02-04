@@ -19,17 +19,12 @@ module.exports = {
         return getAction(action, target.url, option, this.pluginList);
     },
     getFeedService: function(url) {
-        var flow = new SubscribeFlow(url);
-        return flow;
+        return  new SubscribeFlow(url);
     }
 };
 
 var SubscribeFlow = function(url) {
-    this.url = url;
-    this.actions = [];
-    // this.done = {};
-    // this.get = {};
-    this.flow = {
+    var flow = {
         start: {
             action: 'start',
             param: 'FindUrl'
@@ -39,7 +34,7 @@ var SubscribeFlow = function(url) {
                 action: 'start',
                 param: 'RequestFeed'
             },
-            GetFeed: {
+            RequestFeed: {
                 action: 'notify',
                 param: 'End'
             },
@@ -79,87 +74,13 @@ var SubscribeFlow = function(url) {
             }
         }
     };
-
-    // var data = {
-    //     type: 'Meta',
-    //     target: 'url',
-    //     data: {}
-    // };
-    // var next = {
-    //     action: 'start',
-    //     param: 'GetEpisode'
-    // };
-
-    this.on('start', function() {
-        var next = getNextAction('start', {}, this);
-        startNextAction(next, {}, this);
-    });
-
-    this.on('done', function(data) {
-        var next = getNextAction('done', data, this);
-        startNextAction(next, data, this);
-    });
-
-    this.on('get', function(data) {
-        var next = getNextAction('get', data, this);
-        startNextAction(next, data, this);
-    });
-
-    this.on('error', function(data) {
-        console.log('error');
-        console.log(data);
-    });
-
-
-    var getNextAction = function(event, data, self) {
-        if (event === 'start') return self.flow[event];
-        return self.flow[event][data.type];
-    };
-
-    var startNextAction = function(next, data, self) {
-        if (!next) {
-            next = {
-                action: 'notify',
-                param: 'end'
-            };
-        }
-        switch (next.action) {
-            case 'start':
-                var targetAction = getAction(next.param, data.url, {}, PluginService.PluginList);
-                var num = self.actions.push(targetAction);
-                self.actions[num - 1].action(data, self);
-                break;
-            case 'notify':
-                self.emit(next.param, data.data);
-                break;
-            default:
-                break;
-        }
-    };
-
-    var getAction = function(action, url, option, plugin) {
-        var op = option;
-        if (plugin[action].list) {
-            plugin[action].list.forEach(function(ele) {
-                var re = new RegExp(ele.regexp);
-                if (re.exec(url)) {
-                    return ele
-                        .action(url, merge(op, ele.option));
-                }
-
-            });
-        }
-        return plugin[action].action(url, merge(op, plugin[action].option));
-    };
-
-    EventEmitter.call(this);
+    return new BasicFlow(url,flow);
 };
 
-util.inherits(SubscribeFlow, EventEmitter);
 
-var BasicFlow = function(flow) {
-    var Obj = function(flow) {
-        // this.url = url;
+var BasicFlow = function(url,flow) {
+    var Obj = function(url,flow) {
+        this.url = url;
         this.actions = [];
         this.flow = flow;
 
@@ -192,7 +113,7 @@ var BasicFlow = function(flow) {
             if (!next) {
                 next = {
                     action: 'notify',
-                    param: 'end'
+                    param: 'next action missing'
                 };
             }
             switch (next.action) {
@@ -396,7 +317,7 @@ var defaultAction = {
                 })
                 .on('end', function() {
                     flow.emit('done', {
-                        type: 'ParseFeed',
+                        type: 'RequestFeed',
                         target: target.target,
                         data: {}
                     });
@@ -421,46 +342,6 @@ var defaultAction = {
             };
         }
     },
-    // ParseFeed: function(url, option) {
-    //     return {
-    //         option: option,
-    //         action: function(target, flow) {
-    //             var parser = new FeedParser();
-    //             parser
-    //                 .on('meta', function(meta) {
-    //                     flow.emit('get', {
-    //                         type: 'Meta',
-    //                         target: target.url,
-    //                         data: meta
-    //                     });
-    //                 })
-    //                 .on('readable', function() {
-    //                     var stream = this;
-    //                     // chunkデータを保存する
-    //                     while (item = stream.read()) {
-    //                         // if (!data.episode) data.episode = [];
-    //                         // data.feed.episode.push(episode);
-    //                         flow.emit('get', {
-    //                             type: 'Item',
-    //                             target: item.link,
-    //                             data: item
-    //                         });
-    //                     }
-    //                 })
-    //                 .on('end', function() {
-    //                     flow.emit('done', {
-    //                         type: 'ParseFeed',
-    //                         target: target.url,
-    //                         data: {}
-    //                     });
-    //                 }).on('error', function(err) {
-    //                     console.error('HTTP failure while fetching feed');
-    //                     flow.emit('error', err);
-    //                 });
-    //             target.data.pipe(parser);
-    //         }
-    //     };
-    // },
     /**
      * [getChannel description]
      * @param  {[type]} data [description]
@@ -620,15 +501,6 @@ module.exports.PluginList = {
         action: defaultAction.RequestFeed,
         option: {},
     },
-    // ParseFeed: {
-    //     list: [{
-    //         regexp: ".*nico.*",
-    //         action: defaultAction.ParseFeed,
-    //         option: {}
-    //     }],
-    //     action: defaultAction.ParseFeed,
-    //     option: {},
-    // },
     GetChannel: {
         list: [{
             regexp: ".*nico.*",
