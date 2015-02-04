@@ -27,8 +27,8 @@ module.exports = {
 var SubscribeFlow = function(url) {
     this.url = url;
     this.actions = [];
-    this.done = {};
-    this.get = {};
+    // this.done = {};
+    // this.get = {};
     this.flow = {
         start: {
             action: 'start',
@@ -40,8 +40,8 @@ var SubscribeFlow = function(url) {
                 param: 'RequestFeed'
             },
             GetFeed: {
-                action: 'start',
-                param: 'ParseFeed'
+                action: 'notify',
+                param: 'End'
             },
             GetChannel: {
                 action: 'start',
@@ -105,14 +105,23 @@ var SubscribeFlow = function(url) {
         startNextAction(next, data, this);
     });
 
+    this.on('error', function(data) {
+        console.log('error');
+        console.log(data);
+    });
+
+
     var getNextAction = function(event, data, self) {
         if (event === 'start') return self.flow[event];
         return self.flow[event][data.type];
     };
 
     var startNextAction = function(next, data, self) {
-        if(!next) {
-            next = {action:'notify',param:'end'};
+        if (!next) {
+            next = {
+                action: 'notify',
+                param: 'end'
+            };
         }
         switch (next.action) {
             case 'start':
@@ -131,14 +140,14 @@ var SubscribeFlow = function(url) {
     var getAction = function(action, url, option, plugin) {
         var op = option;
         if (plugin[action].list) {
-           plugin[action].list.forEach(function(ele){
+            plugin[action].list.forEach(function(ele) {
                 var re = new RegExp(ele.regexp);
                 if (re.exec(url)) {
                     return ele
                         .action(url, merge(op, ele.option));
                 }
 
-           });
+            });
         }
         return plugin[action].action(url, merge(op, plugin[action].option));
     };
@@ -147,6 +156,79 @@ var SubscribeFlow = function(url) {
 };
 
 util.inherits(SubscribeFlow, EventEmitter);
+
+var BasicFlow = function(flow) {
+    var Obj = function(flow) {
+        // this.url = url;
+        this.actions = [];
+        this.flow = flow;
+
+        this.on('start', function() {
+            var next = getNextAction('start', {}, this);
+            startNextAction(next, {}, this);
+        });
+
+        this.on('done', function(data) {
+            var next = getNextAction('done', data, this);
+            startNextAction(next, data, this);
+        });
+
+        this.on('get', function(data) {
+            var next = getNextAction('get', data, this);
+            startNextAction(next, data, this);
+        });
+
+        this.on('error', function(data) {
+            console.log('error');
+            console.log(data);
+        });
+
+        var getNextAction = function(event, data, self) {
+            if (event === 'start') return self.flow[event];
+            return self.flow[event][data.type];
+        };
+
+        var startNextAction = function(next, data, self) {
+            if (!next) {
+                next = {
+                    action: 'notify',
+                    param: 'end'
+                };
+            }
+            switch (next.action) {
+                case 'start':
+                    var targetAction = getAction(next.param, data.url, {}, PluginService.PluginList);
+                    var num = self.actions.push(targetAction);
+                    self.actions[num - 1].action(data, self);
+                    break;
+                case 'notify':
+                    self.emit(next.param, data.data);
+                    break;
+                default:
+                    break;
+            }
+        };
+
+        var getAction = function(action, url, option, plugin) {
+            var op = option;
+            if (plugin[action].list) {
+                plugin[action].list.forEach(function(ele) {
+                    var re = new RegExp(ele.regexp);
+                    if (re.exec(url)) {
+                        return ele
+                            .action(url, merge(op, ele.option));
+                    }
+
+                });
+            }
+            return plugin[action].action(url, merge(op, plugin[action].option));
+        };
+
+        EventEmitter.call(this);
+    }
+    util.inherits(Obj, EventEmitter);
+    return new Obj(flow);
+}
 
 var defaultAction = {
     FindUrl: function(url, option) {
@@ -223,7 +305,8 @@ var defaultAction = {
                     // If we're using iconv, stream will be the output of iconv
                     // otherwise it will remain the output of request
                     res = res.pipe(iconv);
-                } catch (err) {
+                }
+                catch (err) {
                     res.emit('error', err);
                 }
             }
@@ -257,14 +340,15 @@ var defaultAction = {
                         //     target: 'url',
                         //     data: {}
                         // };
-                        parseFeed(res,target,flow);
-                    } else {
+                        parseFeed(res, target, flow);
+                    }
+                    else {
                         // TODO: フィードのURL探してきて突っ込む？
                         charset =
                             getParams(res.headers['content-type'] || '').charset;
                         console.log(res.headers['content-type']);
                         res = maybeTranslate(res, charset);
-                        parseFeed(res,target,flow);
+                        parseFeed(res, target, flow);
                     }
                 });
         };
@@ -283,44 +367,44 @@ var defaultAction = {
                         getParams(res.headers['content-type'] || '').charset;
                     console.log(res.headers['content-type']);
                     res = maybeTranslate(res, charset);
-                        parseFeed(res,target,flow);
+                    parseFeed(res, target, flow);
                 });
         };
 
-        var parseFeed = function(res,target,flow){
-                var parser = new FeedParser();
-                parser
-                    .on('meta', function(meta) {
-                        flow.emit('get', {
-                            type: 'Meta',
-                            target: meta.link,
-                            data: meta
-                        });
-                    })
-                    .on('readable', function() {
-                        var stream = this;
-                        // chunkデータを保存する
-                        while (item = stream.read()) {
-                            // if (!data.episode) data.episode = [];
-                            // data.feed.episode.push(episode);
-                            flow.emit('get', {
-                                type: 'Item',
-                                target: item.link,
-                                data: item
-                            });
-                        }
-                    })
-                    .on('end', function() {
-                        flow.emit('done', {
-                            type: 'ParseFeed',
-                            target: target.target,
-                            data: {}
-                        });
-                    }).on('error', function(err) {
-                        console.error('HTTP failure while fetching feed');
-                        flow.emit('error', err);
+        var parseFeed = function(res, target, flow) {
+            var parser = new FeedParser();
+            parser
+                .on('meta', function(meta) {
+                    flow.emit('get', {
+                        type: 'Meta',
+                        target: meta.link,
+                        data: meta
                     });
-                res.pipe(parser);
+                })
+                .on('readable', function() {
+                    var stream = this;
+                    // chunkデータを保存する
+                    while (item = stream.read()) {
+                        // if (!data.episode) data.episode = [];
+                        // data.feed.episode.push(episode);
+                        flow.emit('get', {
+                            type: 'Item',
+                            target: item.link,
+                            data: item
+                        });
+                    }
+                })
+                .on('end', function() {
+                    flow.emit('done', {
+                        type: 'ParseFeed',
+                        target: target.target,
+                        data: {}
+                    });
+                }).on('error', function(err) {
+                    console.error('HTTP failure while fetching feed');
+                    flow.emit('error', err);
+                });
+            res.pipe(parser);
         };
 
 
@@ -329,7 +413,8 @@ var defaultAction = {
                 option: option,
                 action: getFeedStatic
             };
-        } else {
+        }
+        else {
             return {
                 option: option,
                 action: getFeedDynamic
@@ -535,15 +620,15 @@ module.exports.PluginList = {
         action: defaultAction.RequestFeed,
         option: {},
     },
-    ParseFeed: {
-        list: [{
-            regexp: ".*nico.*",
-            action: defaultAction.ParseFeed,
-            option: {}
-        }],
-        action: defaultAction.ParseFeed,
-        option: {},
-    },
+    // ParseFeed: {
+    //     list: [{
+    //         regexp: ".*nico.*",
+    //         action: defaultAction.ParseFeed,
+    //         option: {}
+    //     }],
+    //     action: defaultAction.ParseFeed,
+    //     option: {},
+    // },
     GetChannel: {
         list: [{
             regexp: ".*nico.*",
