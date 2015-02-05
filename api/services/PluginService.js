@@ -15,9 +15,13 @@ var util = require("util");
 
 
 module.exports = {
+    getAction: function(){},
+    reloadPlugin: function(){},
+    addPlugin: function(){},
+    delPlugin: function(){}
 };
 
-var defaultAction = {
+var DefaultPlugin = {
     FindUrl: function(url, option) {
         return {
             option: option,
@@ -352,55 +356,55 @@ module.exports.PluginList = {
     FindUrl: {
         list: [{
             regexp: ".*nico.*",
-            action: defaultAction.FindUrl,
+            action: DefaultPlugin.FindUrl,
             option: {}
         }],
-        action: defaultAction.FindUrl,
+        action: DefaultPlugin.FindUrl,
         option: {},
     },
     RequestFeed: {
         list: [{
             regexp: ".*nico.*",
-            action: defaultAction.RequestFeed,
+            action: DefaultPlugin.RequestFeed,
             option: {}
         }],
-        action: defaultAction.RequestFeed,
+        action: DefaultPlugin.RequestFeed,
         option: {},
     },
     GetChannel: {
         list: [{
             regexp: ".*nico.*",
-            action: defaultAction.GetChannel,
+            action: DefaultPlugin.GetChannel,
             option: {}
         }],
-        action: defaultAction.GetChannel,
+        action: DefaultPlugin.GetChannel,
         option: {}
     },
     GetEpisode: {
         list: [{
             regexp: ".*nico.*",
-            action: defaultAction.GetEpisode,
+            action: DefaultPlugin.GetEpisode,
             option: {}
         }],
-        action: defaultAction.GetEpisode,
+        action: DefaultPlugin.GetEpisode,
         option: {}
     },
     ModifyChannel: {
         list: [{
             regexp: ".*nico.*",
-            action: defaultAction.ModifyChannel,
+            action: DefaultPlugin.ModifyChannel,
             option: {}
         }],
-        action: defaultAction.ModifyChannel,
+        action: DefaultPlugin.ModifyChannel,
         option: {}
     },
     ModifyEpisode: {
         list: [{
             regexp: ".*nico.*",
-            action: defaultAction.ModifyEpisode,
+            action: DefaultPlugin.ModifyEpisode,
             option: {}
         }],
-        action: defaultAction.ModifyEpisode,
+        action: DefaultPlugin.ModifyEpisode,
         option: {}
     }
 };
