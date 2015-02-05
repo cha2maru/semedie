@@ -12,8 +12,8 @@ module.exports = {
 
         var feedurl = "http://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp";
         var channelid = 0;
-        var getfeedFlow = PluginService.getFeedService(feedurl);
-        getfeedFlow
+        var subscribeFlow = FeedService.getSubscribeFlow(feedurl);
+        subscribeFlow
             .on('Channel', function(data) {
                 console.log('Channel');
                 // console.log(data);
@@ -45,6 +45,6 @@ module.exports = {
             }).on('error',function(data){
                 console.log('error');
             });
-        getfeedFlow.emit('start', {});
+        subscribeFlow.emit('start', {});
     },
 };
